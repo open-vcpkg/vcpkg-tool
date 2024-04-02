@@ -208,8 +208,6 @@ namespace vcpkg
                        .string_arg("-c")
                        .string_arg("core.longpaths=true")
                        .string_arg("-c")
-                       .string_arg("core.autocrlf=false")
-                       .string_arg("-c")
                        .string_arg("core.filemode=true")
                        .string_arg("apply")
                        .string_arg("--ignore-whitespace")
