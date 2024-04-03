@@ -1,8 +1,14 @@
+#include <vcpkg/base/downloads.h>
 #include <vcpkg/base/fmt.h>
+#include <vcpkg/base/files.h>
 #include <vcpkg/base/jsonreader.h>
+#include <vcpkg/base/messages.h>
 #include <vcpkg/base/strings.h>
+#include <vcpkg/base/util.h>
 
 #include <vcpkg/download.h>
+#include <vcpkg/sourceparagraph.h>
+#include <vcpkg/vcpkgpaths.h>
 
 namespace vcpkg
 {
@@ -162,12 +168,53 @@ namespace vcpkg
 
     const DownloadDeserializer DownloadDeserializer::instance;
 
-    std::vector<DownloadedFile> parse_download(StringView str)
+    ExpectedL<std::vector<DownloadedFile>> parse_download(StringView str)
     {
         Json::Reader reader("download.json");
-        auto obj = Json::parse_object(str, "download.json");
-        auto res =
-            reader.array_elements(obj.get()->get("files")->array(VCPKG_LINE_INFO), DownloadDeserializer::instance);
-        return *res.get();
+        auto maybe_obj = Json::parse_object(str, "download.json");
+
+        if (!maybe_obj.has_value())
+        {
+            return std::move(maybe_obj).error();
+        }
+        auto& obj = *maybe_obj.get();
+
+        auto maybe_res =
+            reader.array_elements(obj.get("files")->array(VCPKG_LINE_INFO), DownloadDeserializer::instance);
+        
+        // TODO: handle warnings
+
+        if (auto res = maybe_res.get())
+        {
+            return *res;
+        }
+        return LocalizedString::from_raw(
+            Strings::join("\n", reader.errors(), [](const auto& error) { return error.data(); }));
+    }
+
+    void download_and_extract(const VcpkgPaths& paths, const SourceControlFileAndLocation& scfl)
+    {
+        auto& fs = paths.get_filesystem();
+        const Path download_json = scfl.port_directory() / "download.json";
+
+        if (!fs.is_regular_file(download_json))
+        {
+            return;
+        }
+
+        std::error_code ec;
+        const std::string file_contents = fs.read_contents(download_json, ec);
+        if (ec)
+        {
+            return;
+        }
+
+        auto maybe_result = parse_download(file_contents);
+        //TODO: Check errors
+        auto& result = *maybe_result.get();
+
+        auto urls_and_files = Util::fmap(result, [](auto&& download_file) {
+            return std::make_pair(std::move(download_file.urls[0]), std::move(download_file.file_name));
+        });
     }
 } // namespace vcpkg

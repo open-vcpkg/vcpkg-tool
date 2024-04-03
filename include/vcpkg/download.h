@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vcpkg/fwd/sourceparagraph.h>
+#include <vcpkg/fwd/vcpkgpaths.h>
+
 #include <vcpkg/base/stringview.h>
 
 #include <string>
@@ -23,6 +26,8 @@ namespace vcpkg
         bool use_head_version = false;
     };
 
-    std::vector<DownloadedFile> parse_download(StringView str);
+    ExpectedL<std::vector<DownloadedFile>> parse_download(StringView str);
+
+    void download_and_extract(const VcpkgPaths& paths, const SourceControlFileAndLocation& scfl);
 
 } // namespace vcpkg
