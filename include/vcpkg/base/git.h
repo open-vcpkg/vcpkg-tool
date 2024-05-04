@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vcpkg/base/fwd/files.h>
 #include <vcpkg/base/fwd/git.h>
 
 #include <vcpkg/base/expected.h>
@@ -58,4 +59,7 @@ namespace vcpkg
 
     // Check whether a repository is a shallow clone
     ExpectedL<bool> is_shallow_clone(const GitConfig& config);
+
+    ExpectedL<bool> apply_patches(
+        Filesystem& fs, const GitConfig& config, View<Path> patch_files, const Path& working_dir, const Path& log_file);
 }
