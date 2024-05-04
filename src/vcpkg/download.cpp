@@ -1,6 +1,6 @@
 #include <vcpkg/base/downloads.h>
-#include <vcpkg/base/fmt.h>
 #include <vcpkg/base/files.h>
+#include <vcpkg/base/fmt.h>
 #include <vcpkg/base/jsonreader.h>
 #include <vcpkg/base/messages.h>
 #include <vcpkg/base/strings.h>
@@ -93,8 +93,6 @@ namespace vcpkg
                 result.headers.push_back("Authorization: Bearer " + auth_token);
             }
 
-            r.optional_object_field(obj, "patches", result.patches, Json::IdentifierArrayDeserializer::instance);
-
             result.urls.emplace_back(
                 fmt::format("https://api.{}/repos/{}/tarball/{}", gh_gost, git_result.repo, git_result.ref));
 
@@ -110,6 +108,212 @@ namespace vcpkg
     };
 
     const GitHubDeserializer GitHubDeserializer::instance;
+
+    struct GitLabDeserializer final : Json::IDeserializer<DownloadedFile>
+    {
+        LocalizedString type_name() const override { return LocalizedString::from_raw("gitlab"); }
+
+        View<StringView> valid_fields() const override
+        {
+            static constexpr StringView valid_fields[] = {
+                StringLiteral{"repo"},
+                StringLiteral{"ref"},
+                StringLiteral{"sha512"},
+                StringLiteral{"out-var"},
+                StringLiteral{"host"},
+                StringLiteral{"authorization-token"},
+                StringLiteral{"patches"},
+            };
+            return valid_fields;
+        }
+
+        Optional<type> visit_object(Json::Reader& r, const Json::Object& obj) const override
+        {
+            DownloadedFile result;
+            result.kind = DownloadType::GitLab;
+
+            auto maybe_git_result = r.visit(obj, GitLikeDeserializer::instance);
+            if (!maybe_git_result.has_value())
+            {
+                return nullopt;
+            }
+
+            auto& git_result = *maybe_git_result.get();
+
+            std::string host = "gitlab.com";
+            r.optional_object_field(obj, "host", host, Json::UntypedStringDeserializer::instance);
+
+            std::string auth_token;
+            if (r.optional_object_field(
+                    obj, "authorization-token", auth_token, Json::UntypedStringDeserializer::instance))
+            {
+                result.headers.push_back("PRIVATE-TOKEN: " + auth_token);
+            }
+
+            result.urls.emplace_back(
+                fmt::format("{}/-/archive/{}/{}-{}.tar.gz", host, git_result.ref, git_result.repo, git_result.ref));
+
+            result.sha_512 = std::move(git_result.sha_512);
+            result.out_var = std::move(git_result.out_var);
+            result.patches = std::move(git_result.patches);
+            result.file_name = std::move(git_result.file_name);
+
+            return result;
+        }
+
+        static const GitLabDeserializer instance;
+    };
+    const GitLabDeserializer GitLabDeserializer::instance;
+
+    struct GitDeserializer final : Json::IDeserializer<DownloadedFile>
+    {
+        LocalizedString type_name() const override { return LocalizedString::from_raw("git"); }
+
+        Optional<type> visit_object(Json::Reader& r, const Json::Object& obj) const override
+        {
+            DownloadedFile result;
+            result.kind = DownloadType::Git;
+
+            auto maybe_git_result = r.visit(obj, GitLikeDeserializer::instance);
+            if (!maybe_git_result.has_value())
+            {
+                return nullopt;
+            }
+
+            auto& git_result = *maybe_git_result.get();
+
+            {
+                std::string url;
+                r.required_object_field(type_name(), obj, "url", url, Json::UntypedStringDeserializer::instance);
+                result.urls.push_back(std::move(url));
+            }
+
+            result.sha_512 = std::move(git_result.sha_512);
+            result.out_var = std::move(git_result.out_var);
+            result.patches = std::move(git_result.patches);
+            result.file_name = std::move(git_result.file_name);
+
+            return result;
+        }
+
+        static const GitDeserializer instance;
+    };
+    const GitDeserializer GitDeserializer::instance;
+
+    struct BitBucketDeserializer final : Json::IDeserializer<DownloadedFile>
+    {
+        LocalizedString type_name() const override { return LocalizedString::from_raw("bitbucket"); }
+
+        View<StringView> valid_fields() const override
+        {
+            static constexpr StringView valid_fields[] = {
+                StringLiteral{"repo"},
+                StringLiteral{"ref"},
+                StringLiteral{"sha512"},
+                StringLiteral{"out-var"},
+                StringLiteral{"patches"},
+            };
+            return valid_fields;
+        }
+
+        Optional<type> visit_object(Json::Reader& r, const Json::Object& obj) const override
+        {
+            DownloadedFile result;
+            result.kind = DownloadType::BitBucket;
+
+            auto maybe_git_result = r.visit(obj, GitLikeDeserializer::instance);
+            if (!maybe_git_result.has_value())
+            {
+                return nullopt;
+            }
+
+            auto& git_result = *maybe_git_result.get();
+
+            result.urls.emplace_back(
+                fmt::format("https://bitbucket.com/{}/get/{}.tar.gz", git_result.repo, git_result.ref));
+
+            result.sha_512 = std::move(git_result.sha_512);
+            result.out_var = std::move(git_result.out_var);
+            result.patches = std::move(git_result.patches);
+            result.file_name = std::move(git_result.file_name);
+
+            return result;
+        }
+
+        static const BitBucketDeserializer instance;
+    };
+    const BitBucketDeserializer BitBucketDeserializer::instance;
+
+    struct SourceforgeDeserializer final : Json::IDeserializer<DownloadedFile>
+    {
+        LocalizedString type_name() const override { return LocalizedString::from_raw("sourceforge"); }
+
+        Optional<type> visit_object(Json::Reader& r, const Json::Object& obj) const override
+        {
+            DownloadedFile result;
+            result.kind = DownloadType::Sourceforge;
+
+            auto maybe_git_result = r.visit(obj, GitLikeDeserializer::instance);
+            if (!maybe_git_result.has_value())
+            {
+                return nullopt;
+            }
+
+            auto& git_result = *maybe_git_result.get();
+
+            result.urls.emplace_back(
+                fmt::format("https://bitbucket.com/{}/get/{}.tar.gz", git_result.repo, git_result.ref));
+
+            result.sha_512 = std::move(git_result.sha_512);
+            result.out_var = std::move(git_result.out_var);
+            result.patches = std::move(git_result.patches);
+            result.file_name = std::move(git_result.file_name);
+
+            return result;
+        }
+
+        static const SourceforgeDeserializer instance;
+    };
+    const SourceforgeDeserializer SourceforgeDeserializer::instance;
+
+    struct DistfileDeserializer final : Json::IDeserializer<DownloadedFile>
+    {
+        LocalizedString type_name() const override { return LocalizedString::from_raw("distfile"); }
+
+        Optional<type> visit_object(Json::Reader& r, const Json::Object& obj) const override
+        {
+            DownloadedFile result;
+            result.kind = DownloadType::Distfile;
+
+            r.required_object_field(type_name(), obj, "urls", result.urls, Json::IdentifierArrayDeserializer::instance);
+            r.required_object_field(
+                type_name(), obj, "sha512", result.sha_512, Json::UntypedStringDeserializer::instance);
+            r.required_object_field(
+                type_name(), obj, "out-var", result.out_var, Json::UntypedStringDeserializer::instance);
+            r.required_object_field(
+                type_name(), obj, "filename", result.file_name, Json::UntypedStringDeserializer::instance);
+            r.optional_object_field(obj, "headers", result.headers, Json::IdentifierArrayDeserializer::instance);
+            r.optional_object_field(obj, "patches", result.patches, Json::IdentifierArrayDeserializer::instance);
+
+            return result;
+        }
+
+        View<StringView> valid_fields() const override
+        {
+            static constexpr StringView t[] = {
+                StringLiteral{"urls"},
+                StringLiteral{"sha512"},
+                StringLiteral{"out-var"},
+                StringLiteral{"filename"},
+                StringLiteral{"headers"},
+                StringLiteral{"patches"},
+            };
+            return t;
+        }
+
+        static const DistfileDeserializer instance;
+    };
+    const DistfileDeserializer DistfileDeserializer::instance;
 
     struct DownloadDeserializer final : Json::IDeserializer<DownloadedFile>
     {
@@ -137,23 +341,23 @@ namespace vcpkg
             }
             else if (auto value = obj.get("gitlab"))
             {
-                r.visit_in_key(*value, "gitlab", result, GitHubDeserializer::instance);
+                r.visit_in_key(*value, "gitlab", result, GitLabDeserializer::instance);
             }
             else if (auto value = obj.get("git"))
             {
-                r.visit_in_key(*value, "git", result, GitHubDeserializer::instance);
+                r.visit_in_key(*value, "git", result, GitDeserializer::instance);
             }
             else if (auto value = obj.get("bitbucket"))
             {
-                r.visit_in_key(*value, "bitbucket", result, GitHubDeserializer::instance);
+                r.visit_in_key(*value, "bitbucket", result, BitBucketDeserializer::instance);
             }
             else if (auto value = obj.get("sourceforge"))
             {
-                r.visit_in_key(*value, "sourceforge", result, GitHubDeserializer::instance);
+                r.visit_in_key(*value, "sourceforge", result, SourceforgeDeserializer::instance);
             }
             else if (auto value = obj.get("distfile"))
             {
-                r.visit_in_key(*value, "distfile", result, GitHubDeserializer::instance);
+                r.visit_in_key(*value, "distfile", result, DistfileDeserializer::instance);
             }
             else
             {
@@ -181,7 +385,7 @@ namespace vcpkg
 
         auto maybe_res =
             reader.array_elements(obj.get("files")->array(VCPKG_LINE_INFO), DownloadDeserializer::instance);
-        
+
         // TODO: handle warnings
 
         if (auto res = maybe_res.get())
@@ -210,7 +414,7 @@ namespace vcpkg
         }
 
         auto maybe_result = parse_download(file_contents);
-        //TODO: Check errors
+        // TODO: Check errors
         auto& result = *maybe_result.get();
 
         auto urls_and_files = Util::fmap(result, [](auto&& download_file) {

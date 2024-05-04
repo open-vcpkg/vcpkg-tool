@@ -13,6 +13,11 @@ namespace vcpkg
     enum class DownloadType
     {
         GitHub,
+        GitLab,
+        Git,
+        Sourceforge,
+        BitBucket,
+        Distfile
     };
     struct DownloadedFile
     {
