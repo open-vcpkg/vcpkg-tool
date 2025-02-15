@@ -18,7 +18,7 @@
 
 namespace vcpkg::Prefab
 {
-    static std::vector<Path> find_modules(const VcpkgPaths& system, const Path& root, const std::string& ext)
+    static std::vector<Path> find_modules(const VcpkgPaths& system, const Path& root, StringLiteral ext)
     {
         const Filesystem& fs = system.get_filesystem();
         std::error_code ec;
@@ -229,12 +229,14 @@ namespace vcpkg::Prefab
 
         ProcessLaunchSettings settings;
         settings.environment = get_clean_environment();
-        const int exit_code = cmd_execute(cmd, settings).value_or_exit(VCPKG_LINE_INFO);
-
-        if (!(exit_code == 0))
+        const auto exit_code = cmd_execute(cmd, settings).value_or_exit(VCPKG_LINE_INFO);
+        if (exit_code != 0)
         {
-            msg::println_error(msgInstallingMavenFile, msg::path = aar);
-            Checks::exit_fail(VCPKG_LINE_INFO);
+            Checks::msg_exit_with_error(VCPKG_LINE_INFO,
+                                        msgInstallingMavenFileFailure,
+                                        msg::path = aar,
+                                        msg::command_line = cmd.command_line(),
+                                        msg::exit_code = exit_code);
         }
     }
 

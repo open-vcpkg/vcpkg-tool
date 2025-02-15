@@ -1,4 +1,5 @@
 #include <vcpkg/base/expected.h>
+#include <vcpkg/base/files.h>
 #include <vcpkg/base/git.h>
 #include <vcpkg/base/messages.h>
 #include <vcpkg/base/parse.h>
@@ -198,5 +199,33 @@ namespace vcpkg
                                git_cmd_builder(config).string_arg("rev-parse").string_arg("--is-shallow-repository")),
                            Tools::GIT)
             .map([](std::string&& output) { return "true" == Strings::trim(std::move(output)); });
+    }
+
+    ExpectedL<bool> apply_patches(
+        Filesystem& fs, const GitConfig& config, View<Path> patch_files, const Path& working_dir, const Path& log_file)
+    {
+        auto cmd = git_cmd_builder(config)
+                       .string_arg("-c")
+                       .string_arg("core.longpaths=true")
+                       .string_arg("-c")
+                       .string_arg("core.filemode=true")
+                       .string_arg("apply")
+                       .string_arg("--ignore-whitespace")
+                       .string_arg("--whitespace=nowarn")
+                       .string_arg("--verbose");
+
+        for (auto&& file : patch_files)
+        {
+            cmd.string_arg(file);
+        }
+
+        auto maybe_result = cmd_execute_and_capture_output(cmd, RedirectedProcessLaunchSettings{working_dir, {}});
+        if (!maybe_result)
+        {
+            return std::move(maybe_result).error();
+        }
+        auto& result = *maybe_result.get();
+        fs.write_contents(log_file, result.output, VCPKG_LINE_INFO);
+        return result.exit_code == 0;
     }
 }
